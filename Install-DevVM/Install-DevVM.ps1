@@ -6,73 +6,74 @@
 # Currently has a few hard-coded things for me (@jhowardmsft)
 # Invokes the same processing for setting up a production CI
 # server, but also turns on KD, net uses to the machine where
-# the development sources are, installs VSCode & LiteIDE, 
+# the development sources are, installs VSCode & LiteIDE,
 # creates a shortcut for a development prompt, plus sets auto-logon.
 # Also assumes that this is running from \\redmond\osg\teams\....\team\jhoward\docker\ci\w2w\Install-DevVM
 
 param(
-    [Parameter(Mandatory=$false)][string]$Branch,
-    [Parameter(Mandatory=$false)][int]$DebugPort
+    [Parameter(Mandatory=$true)][string]$Username,
+    [Parameter(Mandatory=$true)][string]$Password,
+    [Parameter(Mandatory=$false)][string]$Branch
 )
 $ErrorActionPreference = 'Stop'
 
-$DEV_MACHINE="jhoward-z420"
-$DEV_MACHINE_DRIVE="e"
+#$DEV_MACHINE="jhoward-z420"
+$DEV_MACHINE_DRIVE="c"
 
-function Test-Nano() {  
-    $EditionId = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'EditionID').EditionId  
-    return (($EditionId -eq "ServerStandardNano") -or   
-            ($EditionId -eq "ServerDataCenterNano") -or   
-            ($EditionId -eq "NanoServer") -or   
-            ($EditionId -eq "ServerTuva"))  
-}  
+function Test-Nano() {
+    $EditionId = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'EditionID').EditionId
+    return (($EditionId -eq "ServerStandardNano") -or
+            ($EditionId -eq "ServerDataCenterNano") -or
+            ($EditionId -eq "NanoServer") -or
+            ($EditionId -eq "ServerTuva"))
+}
 
-function Copy-File {  
-    [CmdletBinding()]  
-    param(  
-        [string] $SourcePath,  
-        [string] $DestinationPath  
-    )  
+function Copy-File {
+    [CmdletBinding()]
+    param(
+        [string] $SourcePath,
+        [string] $DestinationPath
+    )
 
-    if ($SourcePath -eq $DestinationPath) { return }  
+    if ($SourcePath -eq $DestinationPath) { return }
 
-    if (Test-Path $SourcePath) { 
-        Copy-Item -Path $SourcePath -Destination $DestinationPath 
-    } elseif (($SourcePath -as [System.URI]).AbsoluteURI -ne $null) {  
+    if (Test-Path $SourcePath) {
+        Copy-Item -Path $SourcePath -Destination $DestinationPath
+    } elseif (($SourcePath -as [System.URI]).AbsoluteURI -ne $null) {
         if (Test-Nano) {
-            $handler = New-Object System.Net.Http.HttpClientHandler  
-            $client = New-Object System.Net.Http.HttpClient($handler)  
-            $client.Timeout = New-Object System.TimeSpan(0, 30, 0)  
-            $cancelTokenSource = [System.Threading.CancellationTokenSource]::new()   
-            $responseMsg = $client.GetAsync([System.Uri]::new($SourcePath), $cancelTokenSource.Token)  
-            $responseMsg.Wait()  
+            $handler = New-Object System.Net.Http.HttpClientHandler
+            $client = New-Object System.Net.Http.HttpClient($handler)
+            $client.Timeout = New-Object System.TimeSpan(0, 30, 0)
+            $cancelTokenSource = [System.Threading.CancellationTokenSource]::new()
+            $responseMsg = $client.GetAsync([System.Uri]::new($SourcePath), $cancelTokenSource.Token)
+            $responseMsg.Wait()
 
-            if (!$responseMsg.IsCanceled) {  
-                $response = $responseMsg.Result  
-                if ($response.IsSuccessStatusCode) {  
-                    $downloadedFileStream = [System.IO.FileStream]::new($DestinationPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)  
-                    $copyStreamOp = $response.Content.CopyToAsync($downloadedFileStream)  
-                    $copyStreamOp.Wait()  
-                    $downloadedFileStream.Close()  
-                    if ($copyStreamOp.Exception -ne $null) {  
-                        throw $copyStreamOp.Exception  
-                    }        
-                }  
-            }    
-        }  
+            if (!$responseMsg.IsCanceled) {
+                $response = $responseMsg.Result
+                if ($response.IsSuccessStatusCode) {
+                    $downloadedFileStream = [System.IO.FileStream]::new($DestinationPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+                    $copyStreamOp = $response.Content.CopyToAsync($downloadedFileStream)
+                    $copyStreamOp.Wait()
+                    $downloadedFileStream.Close()
+                    if ($copyStreamOp.Exception -ne $null) {
+                        throw $copyStreamOp.Exception
+                    }
+                }
+            }
+        }
         elseif ($PSVersionTable.PSVersion.Major -ge 5) {
-            # We disable progress display because it kills performance for large downloads (at least on 64-bit PowerShell)  
-            $ProgressPreference = 'SilentlyContinue'  
-            wget -Uri $SourcePath -OutFile $DestinationPath -UseBasicParsing  
-            $ProgressPreference = 'Continue'  
-        } else {  
-            $webClient = New-Object System.Net.WebClient  
-            $webClient.DownloadFile($SourcePath, $DestinationPath)  
-        }   
-    } else {  
-        throw "Cannot copy from $SourcePath"  
-    }  
-}  
+            # We disable progress display because it kills performance for large downloads (at least on 64-bit PowerShell)
+            $ProgressPreference = 'SilentlyContinue'
+            wget -Uri $SourcePath -OutFile $DestinationPath -UseBasicParsing
+            $ProgressPreference = 'Continue'
+        } else {
+            $webClient = New-Object System.Net.WebClient
+            $webClient.DownloadFile($SourcePath, $DestinationPath)
+        }
+    } else {
+        throw "Cannot copy from $SourcePath"
+    }
+}
 
 
 
@@ -82,10 +83,10 @@ Try {
 
     if ([string]::IsNullOrWhiteSpace($Branch)) {
         $Branch=""
-        
+
         $hostname=$env:COMPUTERNAME.ToLower()
         Write-Host "Matching $hostname for a branch type..."
-        
+
         foreach ($line in Get-Content ..\config\config.txt) {
             $line=$line.Trim()
             if (($line[0] -eq "#") -or ($line -eq "")) {
@@ -115,24 +116,10 @@ Try {
     }
 
     # Setup Debugging
-    if ($DebugPort -eq 0) {
-        Write-Host -Fore"If you're sure you want named pipe debugging, press enter."
-        Write-Host "Otherwise, control-C now and add -DebugPort 500nn for network debugging"
-        pause
-        if ($(Test-Path "HKLM:software\microsoft\virtual machine\guest") -eq $True) {
-            Write-Host "INFO: KD to COM1. Configure COM1 to \\.\pipe\<VMName>"
-            bcdedit /debug on
-            bcdedit /dbgsettings serial debugport:1 baudrate:115200
-        }
-    }
-    if ($DebugPort -gt 0) {
-        if (($DebugPort -lt 50000) -or ($DebugPort -gt 50030)) {
-            Throw "Debug port must be 50000-50030"
-        }
-        $ip = (resolve-dnsname $DEV_MACHINE -type A -NoHostsFile -LlmnrNetbiosOnly).IPAddress
-        Write-Host "INFO: KD to $DEV_MACHINE ($ip`:$DebugPort) cle.ar.te.xt"
-        bcdedit /dbgsettings NET HOSTIP`:$ip PORT`:$DebugPort KEY`:cle.ar.te.xt
+    if ($(Test-Path "HKLM:software\microsoft\virtual machine\guest") -eq $True) {
+        Write-Host "INFO: KD to COM1. Configure COM1 to \\.\pipe\<VMName>"
         bcdedit /debug on
+        bcdedit /dbgsettings serial debugport:1 baudrate:115200
     }
 
     if (-not (Test-Nano)) {
@@ -159,11 +146,8 @@ Try {
 
     Write-Host "INFO: Configuring automatic logon"
     REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\WinLogon" /v AutoAdminLogon /t REG_DWORD /d 1 /f
-    REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\WinLogon" /v DefaultUserName /t REG_SZ /d administrator /f
-    REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\WinLogon" /v DefaultPassword /t REG_SZ /d "p@ssw0rd" /f 
-
-    Write-Host "INFO: Net using to $DEV_MACHINE"
-    net use "$DEV_MACHINE_DRIVE`:" "\\$DEV_MACHINE\$DEV_MACHINE_DRIVE`$"
+    REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\WinLogon" /v DefaultUserName /t REG_SZ /d "$Username" /f
+    REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\WinLogon" /v DefaultPassword /t REG_SZ /d "$Password" /f
 
     if (-not (Test-Nano)) {
         Write-Host "INFO: Disabling real time monitoring"
@@ -177,13 +161,6 @@ Try {
         Unblock-File .\docker-docker-shortcut.ps1
         Write-Host "INFO: Running the shortcut file"
         powershell -command .\docker-docker-shortcut.ps1
-    }
-
-    if (-not (Test-Nano)) {
-        Write-Host "INFO: Creating c:\liteide"
-        mkdir c:\liteide -ErrorAction SilentlyContinue
-        Write-Host "INFO: Copying liteide..."
-        xcopy \\redmond\osg\Teams\CORE\BASE\HYP\Team\jhoward\Docker\Install\liteide\liteidex30.2.windows-qt4\liteide\* c:\liteide /s /Y
     }
 
     Write-Host "INFO: Removing docker.exe if it exists"
@@ -207,7 +184,7 @@ Try {
     Copy-Item sfpcopy.exe c:\windows\system32 -ErrorAction SilentlyContinue
     Copy-Item windiff.exe c:\windows\system32 -ErrorAction SilentlyContinue
 
-    Write-Host "INFO: Setting environment variables"  
+    Write-Host "INFO: Setting environment variables"
     $env:GOPATH=$DEV_MACHINE_DRIVE+":\go\src\github.com\docker\docker\vendor;"+$DEV_MACHINE_DRIVE+":\go"
     $env:Path="$env:Path;c:\gopath\bin;"+$DEV_MACHINE_DRIVE+":\docker\utils"
     $env:LOCAL_CI_INSTALL="1"
@@ -235,4 +212,3 @@ Try {
 Finally {
     Write-Host -ForegroundColor Yellow "INFO: Install completed at $(date)"
 }
-

@@ -21,64 +21,64 @@ $DELVE_LOCATION="github.com/derekparker/delve/cmd/dlv"
 # Stop on error
 $ErrorActionPreference="stop"
 
-function Test-Nano() {  
-    $EditionId = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'EditionID').EditionId  
-    return (($EditionId -eq "ServerStandardNano") -or   
-            ($EditionId -eq "ServerDataCenterNano") -or   
-            ($EditionId -eq "NanoServer") -or   
-            ($EditionId -eq "ServerTuva"))  
-}  
+function Test-Nano() {
+    $EditionId = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'EditionID').EditionId
+    return (($EditionId -eq "ServerStandardNano") -or
+            ($EditionId -eq "ServerDataCenterNano") -or
+            ($EditionId -eq "NanoServer") -or
+            ($EditionId -eq "ServerTuva"))
+}
 
-function Copy-File {  
-    [CmdletBinding()]  
-    param(  
-        [string] $SourcePath,  
-        [string] $DestinationPath  
-    )  
+function Copy-File {
+    [CmdletBinding()]
+    param(
+        [string] $SourcePath,
+        [string] $DestinationPath
+    )
 
-    if ($SourcePath -eq $DestinationPath) { return }  
+    if ($SourcePath -eq $DestinationPath) { return }
 
-    if (Test-Path $SourcePath) { 
-        Copy-Item -Path $SourcePath -Destination $DestinationPath 
-    } elseif (($SourcePath -as [System.URI]).AbsoluteURI -ne $null) {  
+    if (Test-Path $SourcePath) {
+        Copy-Item -Path $SourcePath -Destination $DestinationPath
+    } elseif (($SourcePath -as [System.URI]).AbsoluteURI -ne $null) {
         if (Test-Nano) {
-            $handler = New-Object System.Net.Http.HttpClientHandler  
-            $client = New-Object System.Net.Http.HttpClient($handler)  
-            $client.Timeout = New-Object System.TimeSpan(0, 30, 0)  
-            $cancelTokenSource = [System.Threading.CancellationTokenSource]::new()   
-            $responseMsg = $client.GetAsync([System.Uri]::new($SourcePath), $cancelTokenSource.Token)  
-            $responseMsg.Wait()  
+            $handler = New-Object System.Net.Http.HttpClientHandler
+            $client = New-Object System.Net.Http.HttpClient($handler)
+            $client.Timeout = New-Object System.TimeSpan(0, 30, 0)
+            $cancelTokenSource = [System.Threading.CancellationTokenSource]::new()
+            $responseMsg = $client.GetAsync([System.Uri]::new($SourcePath), $cancelTokenSource.Token)
+            $responseMsg.Wait()
 
-            if (!$responseMsg.IsCanceled) {  
-                $response = $responseMsg.Result  
-                if ($response.IsSuccessStatusCode) {  
-                    $downloadedFileStream = [System.IO.FileStream]::new($DestinationPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)  
-                    $copyStreamOp = $response.Content.CopyToAsync($downloadedFileStream)  
-                    $copyStreamOp.Wait()  
-                    $downloadedFileStream.Close()  
-                    if ($copyStreamOp.Exception -ne $null) {  
-                        throw $copyStreamOp.Exception  
-                    }        
-                }  
-            }    
-        }  
-        elseif ($PSVersionTable.PSVersion.Major -ge 5) { 
-            # We disable progress display because it kills performance for large downloads (at least on 64-bit PowerShell)  
-            $ProgressPreference = 'SilentlyContinue'  
-            wget -Uri $SourcePath -OutFile $DestinationPath -UseBasicParsing  
-            $ProgressPreference = 'Continue'  
-        } else {  
-            $webClient = New-Object System.Net.WebClient  
-            $webClient.DownloadFile($SourcePath, $DestinationPath)  
-        }   
-    } else {  
-        throw "Cannot copy from $SourcePath"  
-    }  
-}  
+            if (!$responseMsg.IsCanceled) {
+                $response = $responseMsg.Result
+                if ($response.IsSuccessStatusCode) {
+                    $downloadedFileStream = [System.IO.FileStream]::new($DestinationPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+                    $copyStreamOp = $response.Content.CopyToAsync($downloadedFileStream)
+                    $copyStreamOp.Wait()
+                    $downloadedFileStream.Close()
+                    if ($copyStreamOp.Exception -ne $null) {
+                        throw $copyStreamOp.Exception
+                    }
+                }
+            }
+        }
+        elseif ($PSVersionTable.PSVersion.Major -ge 5) {
+            # We disable progress display because it kills performance for large downloads (at least on 64-bit PowerShell)
+            $ProgressPreference = 'SilentlyContinue'
+            wget -Uri $SourcePath -OutFile $DestinationPath -UseBasicParsing
+            $ProgressPreference = 'Continue'
+        } else {
+            $webClient = New-Object System.Net.WebClient
+            $webClient.DownloadFile($SourcePath, $DestinationPath)
+        }
+    } else {
+        throw "Cannot copy from $SourcePath"
+    }
+}
 
 if (-not (Test-Nano)) {
     echo "$(date)  Git:           $FULL_GIT_LOCATION"    >> $env:SystemDrive\packer\configure.log
-} else { 
+} else {
     echo "$(date)  Git:           $NANO_GIT_LOCATION"    >> $env:SystemDrive\packer\configure.log
 }
 echo "$(date)  JDK:           $JDK_LOCATION"         >> $env:SystemDrive\packer\configure.log
@@ -164,6 +164,9 @@ try {
     echo "$(date) InstallMostThings.ps1 Downloading compiler 3 of 3..." >> $env:SystemDrive\packer\configure.log
     Copy-File -SourcePath "https://raw.githubusercontent.com/jhowardmsft/docker-tdmgcc/master/binutils.zip" -DestinationPath "$env:Temp\binutils.zip"
     echo "$(date) InstallMostThings.ps1 Extracting compiler 1 of 3..." >> $env:SystemDrive\packer\configure.log
+    if (! Test-Path $env:SystemDrive\gcc -pathType container) {
+        mkdir $env:SystemDrive\gcc
+    }
     Expand-Archive $env:Temp\gcc.zip $env:SystemDrive\gcc -Force
     echo "$(date) InstallMostThings.ps1 Extracting compiler 2 of 3..." >> $env:SystemDrive\packer\configure.log
     Expand-Archive $env:Temp\runtime.zip $env:SystemDrive\gcc -Force
@@ -178,7 +181,7 @@ try {
     }
 
     # Keep for reference. This is how you might download OpenSSH-Win64
-    # Download and extract OpenSSH-Win64  
+    # Download and extract OpenSSH-Win64
     #if ($env:LOCAL_CI_INSTALL -ne 1) {
     #    echo "$(date) Phase1.ps1 downloading OpenSSH..." >> $env:SystemDrive\packer\configure.log
     #    mkdir $env:SystemDrive\OpenSSH-Win64 -erroraction silentlycontinue 2>&1 | Out-Null
@@ -233,7 +236,7 @@ try {
     # Add registry keys for enabling nanoserver
     echo "$(date) InstallMostThings.ps1 Adding nano registry keys..." >> $env:SystemDrive\packer\configure.log
     REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Windows Containers" /v SkipVersionCheck /t REG_DWORD /d 2 /f | Out-Null
-    REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Windows Containers" /v SkipSkuCheck /t REG_DWORD /d 2 /f | Out-Null
+    REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Windows Containers" /v SkipSkuCheck /t REG_DWORD /d 2 /f | Out-Null
 
     if (-not (Test-Nano)) {
         # Stop Server Manager from opening at logon
@@ -244,7 +247,7 @@ try {
     # BUGBUG This could be problematic with Copy-File
     if (-not (Test-Nano)) {
         if ($env:LOCAL_CI_INSTALL -ne 1) {
-            # Download and install Java Development Kit 
+            # Download and install Java Development Kit
             # http://stackoverflow.com/questions/10268583/downloading-java-jdk-on-linux-via-wget-is-shown-license-page-instead
             echo "$(date) InstallMostThings.ps1 Downloading JDK..." >> $env:SystemDrive\packer\configure.log
             $wc=New-Object net.webclient;
@@ -283,5 +286,4 @@ Catch [Exception] {
 }
 Finally {
     echo "$(date) InstallMostThings.ps1 Completed." >> $env:SystemDrive\packer\configure.log
-}  
-
+}
